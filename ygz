@@ -24,7 +24,8 @@ local FLOOR_OFFSET = 0.2
 local WALK_SPEED = 32
 
 local enabled = false
-local floorEnabled = true
+local floorEnabled = false
+local visualEnabled = true -- Controla si se ve la esfera del balón agrandado
 local currentSize = DEFAULT_SIZE
 local currentFloorSize = DEFAULT_FLOOR_SIZE
 local guiVisible = true
@@ -53,8 +54,8 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 -- Ventana Principal (MainFrame)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 320, 0, 360)
-mainFrame.Position = UDim2.new(0.5, -160, 0.5, -180)
+mainFrame.Size = UDim2.new(0, 320, 0, 410)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -205)
 mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -105,12 +106,12 @@ titleGradient.Parent = title
 -- Botón REACH (Toggle Reach)
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Name = "ReachBtn"
-toggleBtn.Size = UDim2.new(0.9, 0, 0, 42)
-toggleBtn.Position = UDim2.new(0.05, 0, 0, 52)
+toggleBtn.Size = UDim2.new(0.9, 0, 0, 38)
+toggleBtn.Position = UDim2.new(0.05, 0, 0, 50)
 toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
 toggleBtn.Text = "REACH: OFF"
 toggleBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
-toggleBtn.TextSize = 15
+toggleBtn.TextSize = 14
 toggleBtn.Font = Enum.Font.GothamBold
 toggleBtn.Parent = mainFrame
 
@@ -123,15 +124,36 @@ toggleStroke.Color = Color3.fromRGB(60, 60, 80)
 toggleStroke.Thickness = 1.5
 toggleStroke.Parent = toggleBtn
 
+-- Botón VISUAL REACH (Toggle Invisibilidad)
+local visualToggleBtn = Instance.new("TextButton")
+visualToggleBtn.Name = "VisualToggleBtn"
+visualToggleBtn.Size = UDim2.new(0.9, 0, 0, 38)
+visualToggleBtn.Position = UDim2.new(0.05, 0, 0, 95)
+visualToggleBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 255)
+visualToggleBtn.Text = "VISUAL REACH: ON"
+visualToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+visualToggleBtn.TextSize = 14
+visualToggleBtn.Font = Enum.Font.GothamBold
+visualToggleBtn.Parent = mainFrame
+
+local visualCorner = Instance.new("UICorner")
+visualCorner.CornerRadius = UDim.new(0, 8)
+visualCorner.Parent = visualToggleBtn
+
+local visualStroke = Instance.new("UIStroke")
+visualStroke.Color = Color3.fromRGB(200, 100, 255)
+visualStroke.Thickness = 1.5
+visualStroke.Parent = visualToggleBtn
+
 -- Botón AIR HELPER (Floor Toggle)
 local floorToggleBtn = Instance.new("TextButton")
 floorToggleBtn.Name = "AirHelperBtn"
-floorToggleBtn.Size = UDim2.new(0.9, 0, 0, 42)
-floorToggleBtn.Position = UDim2.new(0.05, 0, 0, 102)
-floorToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
-floorToggleBtn.Text = "AIR HELPER: ON"
-floorToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-floorToggleBtn.TextSize = 15
+floorToggleBtn.Size = UDim2.new(0.9, 0, 0, 38)
+floorToggleBtn.Position = UDim2.new(0.05, 0, 0, 140)
+floorToggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+floorToggleBtn.Text = "AIR HELPER: OFF"
+floorToggleBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+floorToggleBtn.TextSize = 14
 floorToggleBtn.Font = Enum.Font.GothamBold
 floorToggleBtn.Parent = mainFrame
 
@@ -140,14 +162,14 @@ floorToggleCorner.CornerRadius = UDim.new(0, 8)
 floorToggleCorner.Parent = floorToggleBtn
 
 local floorToggleStroke = Instance.new("UIStroke")
-floorToggleStroke.Color = Color3.fromRGB(0, 200, 255)
+floorToggleStroke.Color = Color3.fromRGB(60, 60, 80)
 floorToggleStroke.Thickness = 1.5
 floorToggleStroke.Parent = floorToggleBtn
 
 -- Función Creadora de Sliders
 local function createSlider(parent, yPos, labelText, min, max, initialValue, onChanged)
 	local textLabel = Instance.new("TextLabel")
-	textLabel.Size = UDim2.new(0.9, 0, 0, 20)
+	textLabel.Size = UDim2.new(0.9, 0, 0, 18)
 	textLabel.Position = UDim2.new(0.05, 0, 0, yPos)
 	textLabel.BackgroundTransparency = 1
 	textLabel.Text = labelText .. string.format("%.1f", initialValue)
@@ -159,7 +181,7 @@ local function createSlider(parent, yPos, labelText, min, max, initialValue, onC
 
 	local bg = Instance.new("Frame")
 	bg.Size = UDim2.new(0.9, 0, 0, 18)
-	bg.Position = UDim2.new(0.05, 0, 0, yPos + 22)
+	bg.Position = UDim2.new(0.05, 0, 0, yPos + 20)
 	bg.BackgroundColor3 = Color3.fromRGB(25, 25, 38)
 	bg.Parent = parent
 
@@ -235,23 +257,23 @@ local function createSlider(parent, yPos, labelText, min, max, initialValue, onC
 	end)
 end
 
-createSlider(mainFrame, 152, "Tamaño de Reach: ", MIN_SIZE, MAX_SIZE, currentSize, function(value)
+createSlider(mainFrame, 188, "Tamaño de Reach: ", MIN_SIZE, MAX_SIZE, currentSize, function(value)
 	currentSize = value
 end)
 
-createSlider(mainFrame, 202, "Tamaño Air Helper: ", MIN_FLOOR_SIZE, MAX_FLOOR_SIZE, currentFloorSize, function(value)
+createSlider(mainFrame, 238, "Tamaño Air Helper: ", MIN_FLOOR_SIZE, MAX_FLOOR_SIZE, currentFloorSize, function(value)
 	currentFloorSize = value
 end)
 
 -- Botón Walkspeed
 local walkBtn = Instance.new("TextButton")
 walkBtn.Name = "WalkspeedBtn"
-walkBtn.Size = UDim2.new(0.9, 0, 0, 38)
-walkBtn.Position = UDim2.new(0.05, 0, 0, 258)
+walkBtn.Size = UDim2.new(0.9, 0, 0, 36)
+walkBtn.Position = UDim2.new(0.05, 0, 0, 290)
 walkBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
 walkBtn.Text = "Walkspeed (F)"
 walkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-walkBtn.TextSize = 15
+walkBtn.TextSize = 14
 walkBtn.Font = Enum.Font.GothamBold
 walkBtn.Parent = mainFrame
 
@@ -267,7 +289,7 @@ walkStroke.Parent = walkBtn
 -- Label Inferior
 local infoLabel = Instance.new("TextLabel")
 infoLabel.Size = UDim2.new(0.9, 0, 0, 22)
-infoLabel.Position = UDim2.new(0.05, 0, 0, 310)
+infoLabel.Position = UDim2.new(0.05, 0, 0, 375)
 infoLabel.BackgroundTransparency = 1
 infoLabel.Text = "GUI: " .. TOGGLE_KEY.Name .. " | Caminar: " .. WALK_KEY.Name
 infoLabel.TextColor3 = Color3.fromRGB(130, 140, 160)
@@ -396,6 +418,20 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
+visualToggleBtn.MouseButton1Click:Connect(function()
+	visualEnabled = not visualEnabled
+
+	if visualEnabled then
+		visualToggleBtn.Text = "VISUAL REACH: ON"
+		visualToggleBtn.BackgroundColor3 = Color3.fromRGB(170, 0, 255)
+		visualStroke.Color = Color3.fromRGB(200, 100, 255)
+	else
+		visualToggleBtn.Text = "VISUAL REACH: OFF"
+		visualToggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+		visualStroke.Color = Color3.fromRGB(60, 60, 80)
+	end
+end)
+
 floorToggleBtn.MouseButton1Click:Connect(function()
 	floorEnabled = not floorEnabled
 
@@ -476,8 +512,10 @@ RunService.Heartbeat:Connect(function(dt)
 					part.Size = newSize
 				end
 
-				if part.Transparency ~= 0.5 then
-					part.Transparency = 0.5
+				-- Control de la visibilidad de la esfera
+				local targetTransparency = visualEnabled and 0.5 or 1
+				if part.Transparency ~= targetTransparency then
+					part.Transparency = targetTransparency
 				end
 
 				if part.CanCollide ~= false then
