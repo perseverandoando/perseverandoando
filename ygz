@@ -1,0 +1,535 @@
+-- QWEN GOAT
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local workspace = game:GetService("Workspace")
+
+local TOGGLE_KEY = Enum.KeyCode.RightShift
+local WALK_KEY = Enum.KeyCode.F
+local BALL_NAME = "Ball"
+
+local DEFAULT_SIZE = 2
+local MAX_SIZE = 10
+local MIN_SIZE = 0.5
+
+local DEFAULT_FLOOR_SIZE = 8
+local MAX_FLOOR_SIZE = 30
+local MIN_FLOOR_SIZE = 1
+
+local FLOOR_TRANSPARENCY = 0.35
+local FLOOR_HEIGHT = 0.5
+local FLOOR_OFFSET = 0.2
+local WALK_SPEED = 32
+
+local enabled = false
+local floorEnabled = true
+local currentSize = DEFAULT_SIZE
+local currentFloorSize = DEFAULT_FLOOR_SIZE
+local guiVisible = true
+local trackedBalls = {}
+
+local mouseHoldingWalk = false
+local keyHoldingWalk = false
+local holdingWalk = false
+local savedWalkSpeed = nil
+
+local function getHumanoid()
+	local character = player.Character
+	if character then
+		return character:FindFirstChildOfClass("Humanoid")
+	end
+	return nil
+end
+
+-- ScreenGui Principal
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FabianHubGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Ventana Principal (MainFrame)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 320, 0, 360)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -180)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
+
+-- Borde Neón animado / vistoso
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Thickness = 2.5
+mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+mainStroke.Parent = mainFrame
+
+local strokeGradient = Instance.new("UIGradient")
+strokeGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 170)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(170, 0, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 200, 255))
+})
+strokeGradient.Parent = mainStroke
+
+-- Encabezado / Título
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Size = UDim2.new(1, 0, 0, 42)
+title.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+title.Text = "Fabian HUB / Touchline"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 17
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = title
+
+local titleGradient = Instance.new("UIGradient")
+titleGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 230, 255)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 70, 255))
+})
+titleGradient.Parent = title
+
+-- Botón REACH (Toggle Reach)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Name = "ReachBtn"
+toggleBtn.Size = UDim2.new(0.9, 0, 0, 42)
+toggleBtn.Position = UDim2.new(0.05, 0, 0, 52)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+toggleBtn.Text = "REACH: OFF"
+toggleBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+toggleBtn.TextSize = 15
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 8)
+toggleCorner.Parent = toggleBtn
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Color = Color3.fromRGB(60, 60, 80)
+toggleStroke.Thickness = 1.5
+toggleStroke.Parent = toggleBtn
+
+-- Botón AIR HELPER (Floor Toggle)
+local floorToggleBtn = Instance.new("TextButton")
+floorToggleBtn.Name = "AirHelperBtn"
+floorToggleBtn.Size = UDim2.new(0.9, 0, 0, 42)
+floorToggleBtn.Position = UDim2.new(0.05, 0, 0, 102)
+floorToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+floorToggleBtn.Text = "AIR HELPER: ON"
+floorToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+floorToggleBtn.TextSize = 15
+floorToggleBtn.Font = Enum.Font.GothamBold
+floorToggleBtn.Parent = mainFrame
+
+local floorToggleCorner = Instance.new("UICorner")
+floorToggleCorner.CornerRadius = UDim.new(0, 8)
+floorToggleCorner.Parent = floorToggleBtn
+
+local floorToggleStroke = Instance.new("UIStroke")
+floorToggleStroke.Color = Color3.fromRGB(0, 200, 255)
+floorToggleStroke.Thickness = 1.5
+floorToggleStroke.Parent = floorToggleBtn
+
+-- Función Creadora de Sliders
+local function createSlider(parent, yPos, labelText, min, max, initialValue, onChanged)
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Size = UDim2.new(0.9, 0, 0, 20)
+	textLabel.Position = UDim2.new(0.05, 0, 0, yPos)
+	textLabel.BackgroundTransparency = 1
+	textLabel.Text = labelText .. string.format("%.1f", initialValue)
+	textLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+	textLabel.TextSize = 13
+	textLabel.Font = Enum.Font.GothamMedium
+	textLabel.TextXAlignment = Enum.TextXAlignment.Left
+	textLabel.Parent = parent
+
+	local bg = Instance.new("Frame")
+	bg.Size = UDim2.new(0.9, 0, 0, 18)
+	bg.Position = UDim2.new(0.05, 0, 0, yPos + 22)
+	bg.BackgroundColor3 = Color3.fromRGB(25, 25, 38)
+	bg.Parent = parent
+
+	local bgCorner = Instance.new("UICorner")
+	bgCorner.CornerRadius = UDim.new(0, 9)
+	bgCorner.Parent = bg
+
+	local percent = math.clamp((initialValue - min) / (max - min), 0, 1)
+
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new(percent, 0, 1, 0)
+	fill.BackgroundColor3 = Color3.fromRGB(0, 190, 255)
+	fill.Parent = bg
+
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0, 9)
+	fillCorner.Parent = fill
+
+	local fillGrad = Instance.new("UIGradient")
+	fillGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 150, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 0, 255))
+	})
+	fillGrad.Parent = fill
+
+	local knob = Instance.new("Frame")
+	knob.Size = UDim2.new(0, 20, 0, 20)
+	knob.Position = UDim2.new(percent, -10, 0.5, -10)
+	knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	knob.Parent = bg
+
+	local knobCorner = Instance.new("UICorner")
+	knobCorner.CornerRadius = UDim.new(1, 0)
+	knobCorner.Parent = knob
+
+	local knobStroke = Instance.new("UIStroke")
+	knobStroke.Color = Color3.fromRGB(170, 0, 255)
+	knobStroke.Thickness = 2
+	knobStroke.Parent = knob
+
+	local dragging = false
+
+	local function updateFromX(x)
+		local sliderAbsPos = bg.AbsolutePosition.X
+		local sliderAbsSize = bg.AbsoluteSize.X
+		local p = math.clamp((x - sliderAbsPos) / sliderAbsSize, 0, 1)
+		local value = min + p * (max - min)
+
+		fill.Size = UDim2.new(p, 0, 1, 0)
+		knob.Position = UDim2.new(p, -10, 0.5, -10)
+		textLabel.Text = labelText .. string.format("%.1f", value)
+
+		onChanged(value)
+	end
+
+	bg.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			updateFromX(input.Position.X)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			updateFromX(input.Position.X)
+		end
+	end)
+end
+
+createSlider(mainFrame, 152, "Tamaño de Reach: ", MIN_SIZE, MAX_SIZE, currentSize, function(value)
+	currentSize = value
+end)
+
+createSlider(mainFrame, 202, "Tamaño Air Helper: ", MIN_FLOOR_SIZE, MAX_FLOOR_SIZE, currentFloorSize, function(value)
+	currentFloorSize = value
+end)
+
+-- Botón Walkspeed
+local walkBtn = Instance.new("TextButton")
+walkBtn.Name = "WalkspeedBtn"
+walkBtn.Size = UDim2.new(0.9, 0, 0, 38)
+walkBtn.Position = UDim2.new(0.05, 0, 0, 258)
+walkBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+walkBtn.Text = "Walkspeed (F)"
+walkBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+walkBtn.TextSize = 15
+walkBtn.Font = Enum.Font.GothamBold
+walkBtn.Parent = mainFrame
+
+local walkCorner = Instance.new("UICorner")
+walkCorner.CornerRadius = UDim.new(0, 8)
+walkCorner.Parent = walkBtn
+
+local walkStroke = Instance.new("UIStroke")
+walkStroke.Color = Color3.fromRGB(60, 60, 80)
+walkStroke.Thickness = 1.5
+walkStroke.Parent = walkBtn
+
+-- Label Inferior
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(0.9, 0, 0, 22)
+infoLabel.Position = UDim2.new(0.05, 0, 0, 310)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "GUI: " .. TOGGLE_KEY.Name .. " | Caminar: " .. WALK_KEY.Name
+infoLabel.TextColor3 = Color3.fromRGB(130, 140, 160)
+infoLabel.TextSize = 11
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.Parent = mainFrame
+
+-- Lógica del Script
+local floorFolder = workspace:FindFirstChild("BallFloorFolder")
+if not floorFolder then
+	floorFolder = Instance.new("Folder")
+	floorFolder.Name = "BallFloorFolder"
+	floorFolder.Parent = workspace
+else
+	floorFolder:ClearAllChildren()
+end
+
+local function createFloorForBall(ball)
+	local floor = Instance.new("Part")
+	floor.Name = "BallFloor"
+	floor.Anchored = true
+	floor.Material = Enum.Material.Neon
+	floor.Color = Color3.fromRGB(0, 255, 200)
+	floor.Transparency = FLOOR_TRANSPARENCY
+
+	floor.CanCollide = true
+	floor.CanQuery = false
+	floor.CanTouch = false
+
+	floor.Size = Vector3.new(currentFloorSize, FLOOR_HEIGHT, currentFloorSize)
+	floor.CFrame = CFrame.new(ball.Position - Vector3.new(0, ball.Size.Y / 2 + floor.Size.Y / 2 + FLOOR_OFFSET, 0))
+	floor.Parent = floorFolder
+
+	return floor
+end
+
+local function addBall(part)
+	if part:IsA("BasePart") and not trackedBalls[part] then
+		trackedBalls[part] = {
+			Size = part.Size,
+			Transparency = part.Transparency,
+			CanCollide = part.CanCollide,
+			Floor = nil
+		}
+
+		part.AncestryChanged:Connect(function()
+			if part.Parent == nil then
+				local data = trackedBalls[part]
+				if data and data.Floor then
+					data.Floor:Destroy()
+					data.Floor = nil
+				end
+				trackedBalls[part] = nil
+			end
+		end)
+	end
+end
+
+workspace.DescendantAdded:Connect(function(descendant)
+	if descendant.Name == BALL_NAME then
+		addBall(descendant)
+	end
+end)
+
+for _, descendant in pairs(workspace:GetDescendants()) do
+	if descendant.Name == BALL_NAME then
+		addBall(descendant)
+	end
+end
+
+player.CharacterAdded:Connect(function()
+	savedWalkSpeed = nil
+end)
+
+local function updateWalkVisual()
+	holdingWalk = mouseHoldingWalk or keyHoldingWalk
+
+	if holdingWalk then
+		walkBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+		walkStroke.Color = Color3.fromRGB(0, 255, 150)
+	else
+		walkBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+		walkStroke.Color = Color3.fromRGB(60, 60, 80)
+	end
+end
+
+local function setMouseWalk(state)
+	mouseHoldingWalk = state
+	updateWalkVisual()
+end
+
+local function setKeyWalk(state)
+	keyHoldingWalk = state
+	updateWalkVisual()
+end
+
+walkBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		setMouseWalk(true)
+	end
+end)
+
+walkBtn.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		setMouseWalk(false)
+	end
+end)
+
+walkBtn.MouseLeave:Connect(function()
+	if mouseHoldingWalk then
+		setMouseWalk(false)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		if mouseHoldingWalk then
+			setMouseWalk(false)
+		end
+	end
+
+	if input.KeyCode == WALK_KEY then
+		if keyHoldingWalk then
+			setKeyWalk(false)
+		end
+	end
+end)
+
+floorToggleBtn.MouseButton1Click:Connect(function()
+	floorEnabled = not floorEnabled
+
+	if floorEnabled then
+		floorToggleBtn.Text = "AIR HELPER: ON"
+		floorToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+		floorToggleStroke.Color = Color3.fromRGB(0, 200, 255)
+	else
+		floorToggleBtn.Text = "AIR HELPER: OFF"
+		floorToggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+		floorToggleStroke.Color = Color3.fromRGB(60, 60, 80)
+	end
+end)
+
+toggleBtn.MouseButton1Click:Connect(function()
+	enabled = not enabled
+
+	if enabled then
+		toggleBtn.Text = "REACH: ON"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+		toggleStroke.Color = Color3.fromRGB(0, 255, 150)
+	else
+		toggleBtn.Text = "REACH: OFF"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
+		toggleStroke.Color = Color3.fromRGB(60, 60, 80)
+
+		for part, originalProps in pairs(trackedBalls) do
+			if part and part.Parent then
+				part.Size = originalProps.Size
+				part.Transparency = originalProps.Transparency
+				part.CanCollide = originalProps.CanCollide
+			end
+		end
+	end
+end)
+
+-- Animación de rotación para el degradado del borde
+local rotation = 0
+RunService.Heartbeat:Connect(function(dt)
+	rotation = (rotation + dt * 45) % 360
+	strokeGradient.Rotation = rotation
+
+	local wantWalk = mouseHoldingWalk or keyHoldingWalk
+	holdingWalk = wantWalk
+
+	if wantWalk then
+		local hum = getHumanoid()
+		if hum then
+			if savedWalkSpeed == nil then
+				savedWalkSpeed = hum.WalkSpeed
+			end
+
+			if hum.WalkSpeed ~= WALK_SPEED then
+				hum.WalkSpeed = WALK_SPEED
+			end
+		end
+	else
+		if savedWalkSpeed ~= nil then
+			local hum = getHumanoid()
+			if hum then
+				hum.WalkSpeed = savedWalkSpeed
+			end
+
+			savedWalkSpeed = nil
+		end
+	end
+
+	for part, data in pairs(trackedBalls) do
+		if part and part.Parent then
+			if enabled then
+				local newSize = Vector3.new(
+					data.Size.X * currentSize,
+					data.Size.Y * currentSize,
+					data.Size.Z * currentSize
+				)
+
+				if part.Size ~= newSize then
+					part.Size = newSize
+				end
+
+				if part.Transparency ~= 0.5 then
+					part.Transparency = 0.5
+				end
+
+				if part.CanCollide ~= false then
+					part.CanCollide = false
+				end
+			end
+
+			if floorEnabled then
+				if not data.Floor or not data.Floor.Parent then
+					data.Floor = createFloorForBall(part)
+				end
+
+				local floor = data.Floor
+				local floorSize = Vector3.new(currentFloorSize, FLOOR_HEIGHT, currentFloorSize)
+
+				if floor.Size ~= floorSize then
+					floor.Size = floorSize
+				end
+
+				floor.Material = Enum.Material.Neon
+				floor.Color = Color3.fromRGB(0, 255, 200)
+				floor.Transparency = FLOOR_TRANSPARENCY
+				floor.Anchored = true
+
+				floor.CanCollide = true
+
+				local yOffset = part.Size.Y / 2 + floor.Size.Y / 2 + FLOOR_OFFSET
+				floor.CFrame = CFrame.new(part.Position - Vector3.new(0, yOffset, 0))
+			else
+				if data.Floor then
+					data.Floor:Destroy()
+					data.Floor = nil
+				end
+			end
+		else
+			if data.Floor then
+				data.Floor:Destroy()
+				data.Floor = nil
+			end
+
+			trackedBalls[part] = nil
+		end
+	end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == TOGGLE_KEY then
+		guiVisible = not guiVisible
+		mainFrame.Visible = guiVisible
+	elseif input.KeyCode == WALK_KEY then
+		setKeyWalk(true)
+	end
+end)
